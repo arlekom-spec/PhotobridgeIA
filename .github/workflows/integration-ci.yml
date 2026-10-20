@@ -1,0 +1,28 @@
+name: PhotobridgeIA integration checks
+on:
+  push:
+    branches: [main, 'integration/**']
+  pull_request:
+    branches: [main]
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install syntax parser for CI only
+        run: npm install --no-save --package-lock=false luaparse@0.3.1
+      - name: Parse Lua and check integration contract
+        run: node tests/static-check.mjs
+      - name: Check PowerShell syntax without executing it
+        shell: pwsh
+        run: |
+          $tokens=$null
+          $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile('PhotobridgeIA.lrplugin/PhotobridgeIAClient.ps1',[ref]$tokens,[ref]$errors) | Out-Null
+          if($errors){$errors|ForEach-Object {Write-Error $_}; exit 1}
+          [System.Management.Automation.Language.Parser]::ParseFile('tests/LiveRoundTrip.ps1',[ref]$tokens,[ref]$errors) | Out-Null
+          if($errors){$errors|ForEach-Object {Write-Error $_}; exit 1}
+          Write-Host 'PASS PowerShell syntax'

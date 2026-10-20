@@ -108,8 +108,8 @@ local function listPresets(id)
  write('presets-'..id..'.txt',table.concat(lines,'\n'))
 end
 local function capabilities(id)
- local actions={'inspect','inspect_full','capabilities','presets_list','apply','treatment','preset_apply','white_balance','crop','rotate','develop_get','develop_set','panel_show','tool_select','mask_list','mask_create','mask_invert','spot_count'}
- write('capabilities-'..id..'.txt','version=0.5-beta\ntransport=local-files\nrequire_virtual_copy_for_general_edits=false\nedit_selected_catalog_photo_nondestructively=true\nsupported_actions='..table.concat(actions,',')..'\nlimits=some_ai_and_detailed_mask_edits_need_gui')
+ local actions={'inspect','inspect_full','capabilities','presets_list','apply','treatment','preset_apply','white_balance','crop','rotate','develop_get','develop_set','panel_show','tool_select','mask_list','mask_create','mask_invert','spot_count','curve_get','curve_set','snapshot','auto_tone','auto_wb'}
+ write('capabilities-'..id..'.txt','version=0.6-integration-beta\ntransport=local-files\nrequire_virtual_copy_for_general_edits=false\nedit_selected_catalog_photo_nondestructively=true\nsupported_actions='..table.concat(actions,',')..'\nlimits=some_ai_and_detailed_mask_edits_need_gui')
 end
 
 local function developReady(cat,p,q)
@@ -153,12 +153,71 @@ local tools={loupe=true,crop=true,dust=true,redeye=true,masking=true,
 local masks={brush=true,gradient=true,radialGradient=true,rangeMask=true,aiSelection=true}
 local subtypes={color=true,luminance=true,depth=true,subject=true,sky=true,
  background=true,objects=true,people=true,landscape=true}
+
+-- Selective adaptations based on MIT-licensed Lightroom MCP implementations.
+-- No MCP, collection, export, import or library management modules are loaded.
+local curveChannels={main='ToneCurvePV2012',red='ToneCurvePV2012Red',green='ToneCurvePV2012Green',blue='ToneCurvePV2012Blue'}
+local function curveParse(raw)
+    if type(raw)~='table' then return '' end
+    local out={}
+    for i=1,#raw,2 do
+        out[#out+1]=tostring(raw[i])..':'..tostring(raw[i+1])
+    end
+    return table.concat(out,',')
+end
+local function curveValidate(raw)
+    assert(type(raw)=='string' and #raw>0 and #raw<=350,'Invalid curve data')
+    local curve={}
+    local last=-1
+    local count=0
+    for pair in raw:gmatch('[^,]+') do
+        local xstr,ystr=pair:match('^(%d+):(%d+)$')
+        assert(xstr and ystr,'Curve points must be x:y comma separated')
+        local x,y=tonumber(xstr),tonumber(ystr)
+        assert(x<=255 and y<=255 and x>last,'Curve coordinates must increase within 0..255')
+        curve[#curve+1]=x
+        curve[#curve+1]=y
+        last=x
+        count=count+1
+        assert(count<=32,'Curve has too many points')
+    end
+    assert(count>=2 and curve[1]==0 and curve[#curve-1]==255,'Curve endpoints must be x=0 and x=255')
+    return curve
+end
+local function curvesRead(p,id)
+    local s=p:getDevelopSettings()
+    local lines={'photo_id='..tostring(p.localIdentifier),'curve_name='..clean(s.ToneCurveName2012)}
+    for channel,key in pairs(curveChannels) do
+        lines[#lines+1]=channel..'='..curveParse(s[key])
+    end
+    write('curves-'..id..'.txt',table.concat(lines,'\n'))
+end
+local function scalarVerified(a,b)
+    if type(a)=='number' and type(b)=='number' then return math.abs(a-b)<0.011 end
+    return a==b
+end
+local function autoRead(p,id,before,mode)
+    local after=p:getDevelopSettings()
+    local keys={'Exposure2012','Contrast2012','Highlights2012','Shadows2012',
+                'Whites2012','Blacks2012','Temperature','Tint'}
+    local lines={'photo_id='..tostring(p.localIdentifier),'action='..mode}
+    local changed=0
+    for _,k in ipairs(keys) do
+        local a,b=before[k],after[k]
+        lines[#lines+1]=k..'.before='..clean(a)
+        lines[#lines+1]=k..'.after='..clean(b)
+        if not scalarVerified(a,b) then changed=changed+1 end
+    end
+    lines[#lines+1]='changed_fields='..changed
+    write('auto-'..id..'.txt',table.concat(lines,'\n'))
+end
+
 _G.photobridgeIAGeneration = (_G.photobridgeIAGeneration or 0) + 1
 local generation = _G.photobridgeIAGeneration
 Tasks.startAsyncTask(function()
     -- Do not execute commands left behind by a previous Lightroom session.
     Files.delete(Paths.child(root,'command.txt'))
-    write('status.txt','status=ready\nversion=0.5-beta\n')
+    write('status.txt','status=ready\nversion=0.6-integration-beta\n')
     while _G.photobridgeIAGeneration == generation do
         local raw = read('command.txt')
         if raw then
@@ -180,10 +239,22 @@ Tasks.startAsyncTask(function()
                     assert(q.photo_id==tostring(p.localIdentifier),'Selected photo changed')
                     assert(q.catalog==cat:getPath(),'Catalog changed')
                     assert(q.value=='color' or q.value=='grayscale','Invalid treatment')
-                    -- Treatment may apply directly to the selected catalog photo.
+                    -- Quick Develop may upgrade ProcessVersion on legacy photos.
+                    -- Restore the original engine and verify both invariants.
+                    local baseline=p:getDevelopSettings()
+                    local previousVersion=baseline.ProcessVersion
                     cat:withWriteAccessDo('PhotobridgeIA - treatment '..q.id,function()
                         p:quickDevelopSetTreatment(q.value)
                     end,{timeout=10})
+                    local after=p:getDevelopSettings()
+                    if previousVersion and tostring(after.ProcessVersion)~=tostring(previousVersion) then
+                        cat:withWriteAccessDo('PhotobridgeIA preserve process version '..q.id,function()
+                            p:applyDevelopSettings({ProcessVersion=previousVersion},'Preserve process version')
+                        end,{timeout=10})
+                    end
+                    after=p:getDevelopSettings()
+                    assert(tostring(after.ProcessVersion)==tostring(previousVersion),'Process version changed unexpectedly')
+                    assert(after.ConvertToGrayscale==(q.value=='grayscale'),'Treatment did not persist')
                     state(p); preview(p,q.id)
                 elseif q.action=='capabilities' then
                     capabilities(q.id)
@@ -227,6 +298,58 @@ Tasks.startAsyncTask(function()
                         if q.value=='left' then p:rotateLeft() else p:rotateRight() end
                     end,{timeout=10})
                     state(p); preview(p,q.id)
+
+                elseif q.action=='curve_get' then
+                    checked(q,cat,p,false)
+                    curvesRead(p,q.id)
+                elseif q.action=='curve_set' then
+                    checked(q,cat,p,false)
+                    local key=assert(curveChannels[q.channel or 'main'],'Unsupported curve channel')
+                    local curve=curveValidate(q.points)
+                    local name=q.name or 'Custom'
+                    assert(name=='Custom' or name=='Linear','Unsupported curve name')
+                    if name=='Linear' then
+                        assert(#curve==4 and curve[1]==0 and curve[2]==0 and curve[3]==255 and curve[4]==255,
+                            'Linear curve needs endpoints (0,0) and (255,255)')
+                    end
+                    local prior=p:getDevelopSettings()
+                    cat:withWriteAccessDo('PhotobridgeIA Tone Curve '..q.id,function()
+                        p:applyDevelopSettings({[key]=curve,ToneCurveName2012=name},'PhotobridgeIA Tone Curve')
+                    end,{timeout=10})
+                    local now=p:getDevelopSettings()
+                    if prior.ProcessVersion and tostring(now.ProcessVersion)~=tostring(prior.ProcessVersion) then
+                        cat:withWriteAccessDo('PhotobridgeIA restore curve process version '..q.id,function()
+                            p:applyDevelopSettings({ProcessVersion=prior.ProcessVersion},'Preserve curve process version')
+                        end,{timeout=10})
+                        now=p:getDevelopSettings()
+                    end
+                    assert(tostring(now.ProcessVersion)==tostring(prior.ProcessVersion),'Process version changed')
+                    assert(type(now[key])=='table' and #now[key]==#curve,'Lightroom did not store the curve')
+                    for i=1,#curve do
+                        assert(scalarVerified(now[key][i],curve[i]),'Curve was altered or rejected by Lightroom')
+                    end
+                    curvesRead(p,q.id)
+                    preview(p,q.id)
+                elseif q.action=='snapshot' then
+                    checked(q,cat,p,false)
+                    local name=q.name
+                    assert(name and #name>0 and #name<=100 and not name:find('[%c]'),'Invalid snapshot name')
+                    cat:withWriteAccessDo('PhotobridgeIA Snapshot '..q.id,function()
+                        p:createDevelopSnapshot(name)
+                    end,{timeout=10})
+                    write('snapshot-'..q.id..'.txt','created='..name..'\nreadback=not-supported-by-sdk')
+                elseif q.action=='auto_tone' or q.action=='auto_wb' then
+                    assert(q.confirm=='experimental','Native Auto commands require confirm=experimental')
+                    developReady(cat,p,q)
+                    local previous=p:getDevelopSettings()
+                    if q.action=='auto_tone' then
+                        Develop.setAutoTone()
+                    else
+                        Develop.setAutoWhiteBalance()
+                    end
+                    Tasks.sleep(0.7)
+                    autoRead(p,q.id,previous,q.action)
+                    state(p); preview(p,q.id)
                 elseif q.action=='develop_get' then
                     developReady(cat,p,q)
                     local param=validParam(q.parameter)
@@ -240,9 +363,11 @@ Tasks.startAsyncTask(function()
                     assert(type(low)=='number' and type(high)=='number' and low<high,'Parameter not editable')
                     local v=tonumber(q.value)
                     assert(v and v==v and v>=low and v<=high,'Value outside range')
-                    cat:withWriteAccessDo('PhotobridgeIA develop '..q.id,function()
-                        Develop.setValue(param,v)
-                    end,{timeout=10})
+                    -- DevelopController owns its own write transaction (no nested write access).
+                    Develop.setValue(param,v)
+                    Tasks.sleep(0.15)
+                    local actual=Develop.getValue(param)
+                    assert(scalarVerified(actual,v),'Lightroom did not keep the requested value')
                     state(p); preview(p,q.id)
                 elseif q.action=='panel_show' then
                     developReady(cat,p,q)
@@ -257,14 +382,20 @@ Tasks.startAsyncTask(function()
                     developReady(cat,p,q)
                     maskDump(q.id)
                 elseif q.action=='mask_create' then
+                    assert(q.confirm=='experimental','Mask creation requires confirm=experimental')
                     developReady(cat,p,q)
                     assert(masks[q.kind],'Unsupported mask kind')
                     assert((q.kind~='aiSelection' and q.kind~='rangeMask') or subtypes[q.subtype],'Mask subtype required')
                     Develop.goToMasking()
-                    Develop.createNewMask(q.kind,q.subtype)
+                    local previous= #(Develop.getAllMasks() or {})
+                    local newId=Develop.createNewMask(q.kind,q.subtype)
+                    Tasks.sleep(0.5)
+                    local after= #(Develop.getAllMasks() or {})
+                    assert(newId or after>previous,'Lightroom did not create a mask')
                     maskDump(q.id)
                     state(p); preview(p,q.id)
                 elseif q.action=='mask_invert' then
+                    assert(q.confirm=='experimental','Mask inversion requires confirm=experimental')
                     developReady(cat,p,q)
                     assert(q.mask_id and q.mask_id:match('^[%w%-_]+$') and #q.mask_id<128,'Invalid mask ID')
                     Develop.invertMask(q.mask_id)
@@ -290,6 +421,10 @@ Tasks.startAsyncTask(function()
                         cat:withWriteAccessDo('PhotobridgeIA '..q.id,function()
                             p:applyDevelopSettings(settings,'PhotobridgeIA '..q.id)
                         end,{timeout=10})
+                    local latest=p:getDevelopSettings()
+                    for k,v in pairs(settings) do
+                        assert(scalarVerified(latest[k],v),'Lightroom did not apply '..k)
+                    end
                     state(p); preview(p,q.id)
                 else error('Unsupported action') end
             end)
