@@ -8,8 +8,33 @@ $ErrorActionPreference='Stop'
 $root=Join-Path $PSScriptRoot 'bridge'
 $status=Join-Path $root 'status.txt'
 $heartbeat=Join-Path $root 'heartbeat.txt'
-if(-not (Test-Path $status) -or (Get-Content $status -Raw) -notmatch 'version=0.5-beta'){throw 'PhotobridgeIA 0.5 no esta disponible'}
-if(-not (Test-Path $heartbeat) -or ((Get-Date)-(Get-Item $heartbeat).LastWriteTime).TotalSeconds -gt 15){throw 'PhotobridgeIA no responde. Abrir Lightroom Classic'}
+function Bridge-Ready {
+ if(-not (Test-Path $status) -or -not (Test-Path $heartbeat)){return $false}
+ if((Get-Content $status -Raw) -notmatch 'version=0.5-beta'){return $false}
+ return ((Get-Date)-(Get-Item $heartbeat).LastWriteTime).TotalSeconds -le 12
+}
+if(-not (Bridge-Ready)){
+ $lr=Get-Process Lightroom -ErrorAction SilentlyContinue | Select-Object -First 1
+ if(-not $lr){throw 'Lightroom Classic no esta abierto'}
+ $returnToDevelop=($lr.MainWindowTitle -match 'Revelar|Develop')
+ $native=@'
+using System;
+using System.Runtime.InteropServices;
+public static class PBAutoWake {
+ [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hwnd,uint message,IntPtr w,IntPtr l);
+}
+'@
+ Add-Type -TypeDefinition $native
+ if(-not [PBAutoWake]::PostMessage($lr.MainWindowHandle,0x111,[IntPtr]40049,[IntPtr]::Zero)){
+  throw 'No se pudo abrir Biblioteca para iniciar el puente'
+ }
+ for($attempt=0;$attempt -lt 48;$attempt++){
+  Start-Sleep -Milliseconds 250
+  if(Bridge-Ready){break}
+ }
+ if($returnToDevelop){[PBAutoWake]::PostMessage($lr.MainWindowHandle,0x111,[IntPtr]40050,[IntPtr]::Zero)|Out-Null}
+}
+if(-not (Bridge-Ready)){throw 'PhotobridgeIA no responde. Comprobar que este activado en el Gestor de plugins'}
 function Read-State {
  $hash=@{}
  foreach($line in (Get-Content (Join-Path $root 'state.txt'))){
