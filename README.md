@@ -22,7 +22,7 @@ Complemento experimental para **Adobe Lightroom Classic** orientado al módulo *
 1. Copiar `PhotobridgeIA.lrplugin` a una carpeta local.
 2. En Lightroom Classic, abrir **Archivo > Gestor de plugins > Añadir** y seleccionar la carpeta.
 3. Verificar que aparezca **PhotobridgeIA** como activado.
-4. `Info.lua` declara el inicio automático con Lightroom (`LrInitPlugin` y `LrForceInitPlugin`).
+4. `Info.lua` solicita la carga automática (`LrInitPlugin` y `LrForceInitPlugin`). En la configuración probada, si Lightroom abre directamente en Revelar, la carga se difiere hasta entrar en Biblioteca.
 5. Utilizar `PhotobridgeIAClient.ps1` desde PowerShell en la carpeta del complemento.
 
 Ejemplos:
@@ -45,7 +45,12 @@ No hay servidor HTTP, token, credenciales ni conexión directa a la nube de Adob
 
 ## Estado de pruebas
 
-La versión 0.5 se cargó en Lightroom Classic y pasó pruebas de inspección, capacidades, lectura de ajustes, presets, máscaras y retoque, además de ajustes de revelado y tratamiento de color aplicados con valores que no alteraron el aspecto de la fotografía (10 operaciones). No se ha realizado aún una validación exhaustiva de todas las herramientas avanzadas ni una prueba completa de arranque después de cerrar y reabrir Lightroom.
+La versión 0.5 se cargó en Lightroom Classic y pasó pruebas de inspección, capacidades, lectura de ajustes, presets, máscaras y retoque, además de ajustes de revelado y tratamiento de color aplicados con valores que no alteraron el aspecto de la fotografía (10 operaciones). No se ha realizado aún una validación exhaustiva de todas las herramientas avanzadas. La prueba de reinicio detectó que al abrir en Revelar el plugin puede quedar habilitado pero sin ejecutar su inicialización hasta entrar en Biblioteca.
+
+
+## Activación de respaldo (Windows)
+
+Si el pulso de actividad del plugin no se reanuda al abrir Lightroom en Revelar, `PhotobridgeIAClient.ps1` intenta activarlo al recibir la primera orden. Solicita temporalmente el módulo Biblioteca y vuelve a Revelar si ese era el módulo activo. En la instalación de referencia utiliza comandos internos de menú de Lightroom Classic 15.x; esos identificadores pueden variar entre versiones y el mecanismo debe verificarse en otras instalaciones. La carga en Biblioteca está probada; la activación automática del cliente después de un reinicio aún no cuenta con una prueba completa.
 
 ## Licencia
 
