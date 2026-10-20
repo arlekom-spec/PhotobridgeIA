@@ -1,6 +1,6 @@
 param(
  [Parameter(Mandatory=$true)]
- [ValidateSet('inspect','inspect_full','capabilities','presets_list','apply','treatment','preset_apply','white_balance','crop','rotate','develop_get','develop_set','panel_show','tool_select','mask_list','mask_create','mask_invert','spot_count')]
+ [ValidateSet('inspect','inspect_full','capabilities','presets_list','apply','treatment','preset_apply','white_balance','crop','rotate','develop_get','develop_set','panel_show','tool_select','mask_list','mask_create','mask_invert','spot_count','curve_get','curve_set','snapshot','auto_tone','auto_wb')]
  [string]$Action,
  [string]$Options=''
 )
@@ -10,7 +10,7 @@ $status=Join-Path $root 'status.txt'
 $heartbeat=Join-Path $root 'heartbeat.txt'
 function Bridge-Ready {
  if(-not (Test-Path $status) -or -not (Test-Path $heartbeat)){return $false}
- if((Get-Content $status -Raw) -notmatch 'version=0.5-beta'){return $false}
+ if((Get-Content $status -Raw) -notmatch 'version=0.6-integration-beta'){return $false}
  return ((Get-Date)-(Get-Item $heartbeat).LastWriteTime).TotalSeconds -le 12
 }
 if(-not (Bridge-Ready)){
@@ -83,7 +83,7 @@ try {
   }
  }
  $id=Send-Command $Action $extras
- $prefix=@{inspect_full='settings';presets_list='presets';capabilities='capabilities';develop_get='develop';mask_list='masks';mask_create='masks';mask_invert='masks';spot_count='spots';tool_select='tool'}[$Action]
+ $prefix=@{inspect_full='settings';presets_list='presets';capabilities='capabilities';develop_get='develop';mask_list='masks';mask_create='masks';mask_invert='masks';spot_count='spots';tool_select='tool';curve_get='curves';curve_set='curves';snapshot='snapshot';auto_tone='auto';auto_wb='auto'}[$Action]
  Write-Output ('OK action='+$Action+' id='+$id)
  if($Action -eq 'inspect'){Get-Content (Join-Path $root 'state.txt')}
  elseif($prefix){$file=Join-Path $root ($prefix+'-'+$id+'.txt');if(Test-Path $file){Get-Content $file}}
