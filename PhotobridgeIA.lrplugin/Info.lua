@@ -9,5 +9,5 @@ return {
  LrForceInitPlugin=true,
  LrEnablePlugin='Init.lua',
  LrLibraryMenuItems={{title='Iniciar PhotobridgeIA',file='Init.lua'}},
- VERSION={major=0,minor=5,revision=0},
+ VERSION={major=0,minor=6,revision=0},
 }
