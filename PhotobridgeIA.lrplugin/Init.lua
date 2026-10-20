@@ -306,10 +306,24 @@ Tasks.startAsyncTask(function()
                     checked(q,cat,p,false)
                     local key=assert(curveChannels[q.channel or 'main'],'Unsupported curve channel')
                     local curve=curveValidate(q.points)
+                    local name=q.name or 'Custom'
+                    assert(name=='Custom' or name=='Linear','Unsupported curve name')
+                    if name=='Linear' then
+                        assert(#curve==4 and curve[1]==0 and curve[2]==0 and curve[3]==255 and curve[4]==255,
+                            'Linear curve needs endpoints (0,0) and (255,255)')
+                    end
+                    local prior=p:getDevelopSettings()
                     cat:withWriteAccessDo('PhotobridgeIA Tone Curve '..q.id,function()
-                        p:applyDevelopSettings({[key]=curve,ToneCurveName2012='Custom'},'PhotobridgeIA Tone Curve')
+                        p:applyDevelopSettings({[key]=curve,ToneCurveName2012=name},'PhotobridgeIA Tone Curve')
                     end,{timeout=10})
                     local now=p:getDevelopSettings()
+                    if prior.ProcessVersion and tostring(now.ProcessVersion)~=tostring(prior.ProcessVersion) then
+                        cat:withWriteAccessDo('PhotobridgeIA restore curve process version '..q.id,function()
+                            p:applyDevelopSettings({ProcessVersion=prior.ProcessVersion},'Preserve curve process version')
+                        end,{timeout=10})
+                        now=p:getDevelopSettings()
+                    end
+                    assert(tostring(now.ProcessVersion)==tostring(prior.ProcessVersion),'Process version changed')
                     assert(type(now[key])=='table' and #now[key]==#curve,'Lightroom did not store the curve')
                     for i=1,#curve do
                         assert(scalarVerified(now[key][i],curve[i]),'Curve was altered or rejected by Lightroom')
