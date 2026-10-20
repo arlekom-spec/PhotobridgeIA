@@ -339,6 +339,7 @@ Tasks.startAsyncTask(function()
                     end,{timeout=10})
                     write('snapshot-'..q.id..'.txt','created='..name..'\nreadback=not-supported-by-sdk')
                 elseif q.action=='auto_tone' or q.action=='auto_wb' then
+                    assert(q.confirm=='experimental','Native Auto commands require confirm=experimental')
                     developReady(cat,p,q)
                     local previous=p:getDevelopSettings()
                     if q.action=='auto_tone' then
@@ -381,6 +382,7 @@ Tasks.startAsyncTask(function()
                     developReady(cat,p,q)
                     maskDump(q.id)
                 elseif q.action=='mask_create' then
+                    assert(q.confirm=='experimental','Mask creation requires confirm=experimental')
                     developReady(cat,p,q)
                     assert(masks[q.kind],'Unsupported mask kind')
                     assert((q.kind~='aiSelection' and q.kind~='rangeMask') or subtypes[q.subtype],'Mask subtype required')
@@ -393,6 +395,7 @@ Tasks.startAsyncTask(function()
                     maskDump(q.id)
                     state(p); preview(p,q.id)
                 elseif q.action=='mask_invert' then
+                    assert(q.confirm=='experimental','Mask inversion requires confirm=experimental')
                     developReady(cat,p,q)
                     assert(q.mask_id and q.mask_id:match('^[%w%-_]+$') and #q.mask_id<128,'Invalid mask ID')
                     Develop.invertMask(q.mask_id)
