@@ -239,10 +239,22 @@ Tasks.startAsyncTask(function()
                     assert(q.photo_id==tostring(p.localIdentifier),'Selected photo changed')
                     assert(q.catalog==cat:getPath(),'Catalog changed')
                     assert(q.value=='color' or q.value=='grayscale','Invalid treatment')
-                    -- Treatment may apply directly to the selected catalog photo.
+                    -- Quick Develop may upgrade ProcessVersion on legacy photos.
+                    -- Restore the original engine and verify both invariants.
+                    local baseline=p:getDevelopSettings()
+                    local previousVersion=baseline.ProcessVersion
                     cat:withWriteAccessDo('PhotobridgeIA - treatment '..q.id,function()
                         p:quickDevelopSetTreatment(q.value)
                     end,{timeout=10})
+                    local after=p:getDevelopSettings()
+                    if previousVersion and tostring(after.ProcessVersion)~=tostring(previousVersion) then
+                        cat:withWriteAccessDo('PhotobridgeIA preserve process version '..q.id,function()
+                            p:applyDevelopSettings({ProcessVersion=previousVersion},'Preserve process version')
+                        end,{timeout=10})
+                    end
+                    after=p:getDevelopSettings()
+                    assert(tostring(after.ProcessVersion)==tostring(previousVersion),'Process version changed unexpectedly')
+                    assert(after.ConvertToGrayscale==(q.value=='grayscale'),'Treatment did not persist')
                     state(p); preview(p,q.id)
                 elseif q.action=='capabilities' then
                     capabilities(q.id)
