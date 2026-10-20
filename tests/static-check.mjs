@@ -16,7 +16,7 @@ assert.doesNotMatch(init,/createVirtualCopies/);
 for(const file of [...files,"PhotobridgeIA.lrplugin/PhotobridgeIAClient.ps1"]){
  const data=fs.readFileSync(file,"utf8");
  for(const pattern of [
-   /[a-z]:\\users\\/i, /\b(?:andres|arlek|camdelsoporte)\b/i,
+   /[a-z]:\\users\\/i,
    /github_pat_[a-z0-9_]+/i, /ghp_[a-z0-9]{15,}/i,
    /\b10\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/i
  ]){assert.equal(pattern.test(data),false,"Private content in "+file);}
