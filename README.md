@@ -50,7 +50,7 @@ La versión 0.5 se cargó en Lightroom Classic y pasó pruebas de inspección, c
 
 ## Activación de respaldo (Windows)
 
-Si el pulso de actividad del plugin no se reanuda al abrir Lightroom en Revelar, `PhotobridgeIAClient.ps1` intenta activarlo al recibir la primera orden. Solicita temporalmente el módulo Biblioteca y vuelve a Revelar si ese era el módulo activo. En la instalación de referencia utiliza comandos internos de menú de Lightroom Classic 15.x; esos identificadores pueden variar entre versiones y el mecanismo debe verificarse en otras instalaciones. La carga en Biblioteca está probada; la activación automática del cliente después de un reinicio aún no cuenta con una prueba completa.
+Si el pulso de actividad del plugin no se reanuda al abrir Lightroom en Revelar, `PhotobridgeIAClient.ps1` intenta activarlo al recibir la primera orden. Solicita temporalmente el módulo Biblioteca y vuelve a Revelar si ese era el módulo activo. En la instalación de referencia utiliza comandos internos de menú de Lightroom Classic 15.x; esos identificadores pueden variar entre versiones y el mecanismo debe verificarse en otras instalaciones. La activación del cliente **fue verificada después de reiniciar Lightroom directamente en Revelar**: el cliente inició el puente mediante Biblioteca, recibió respuesta de Lightroom y regresó a Revelar. El puente no siempre inicia al abrir Lightroom, pero se recupera automáticamente al recibir la primera orden.
 
 ## Licencia
 
