@@ -1,0 +1,17 @@
+bridge/
+*.bak*
+*.lrcat
+*.lrdata/
+*.lrcat-data/
+*.jpg
+*.jpeg
+*.png
+*.dng
+*.nef
+*.cr2
+*.arw
+*.xmp
+*.log
+*.tmp
+.env
+.env.*
