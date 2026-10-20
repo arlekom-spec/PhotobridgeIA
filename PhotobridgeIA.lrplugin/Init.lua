@@ -3,14 +3,15 @@ local App = import 'LrApplication'
 local Files = import 'LrFileUtils'
 local Paths = import 'LrPathUtils'
 local Date = import 'LrDate'
-local Develop = import 'LrDevelopController'
-local View = import 'LrApplicationView'
+local Develop = nil
+local View = nil
 local root = Paths.child(_PLUGIN.path, 'bridge')
 Files.createAllDirectories(root)
 local function write(name, body)
     local f = assert(io.open(Paths.child(root,name), 'wb'))
     f:write(body); f:close()
 end
+write('startup-check.txt','init-loaded-at='..tostring(Date.currentTime())..'\n')
 local function read(name)
     local f = io.open(Paths.child(root,name), 'rb')
     if not f then return nil end
@@ -112,6 +113,8 @@ local function capabilities(id)
 end
 
 local function developReady(cat,p,q)
+ if not Develop then Develop=import 'LrDevelopController' end
+ if not View then View=import 'LrApplicationView' end
  checked(q,cat,p,false)
  if View.getCurrentModuleName()~='develop' then
   View.switchToModule('develop')
